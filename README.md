@@ -32,4 +32,4 @@ pip install pygame pygame-freetype
 python main.py
 
 Why?
-This isn’t meant to be a "real" game, but rather a fun experiment in AI-generated code. It’s a small way to explore how AI can assist in game development with minimal human input. If you want to fork it, break it, or expand on it – go for it! 🚀
+This isn’t meant to be a "real" game, but rather a fun experiment in AI-generated code. It’s a small way to explore how AI can assist in game development with minimal human input. If you want to fork it, break it, or expand on it – go for it! 🚀 Also, I am aware that the points mechanism is in the code, but does not work. I will look into at some point, or not. This is just a proof of concept.
