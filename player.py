@@ -149,6 +149,13 @@ class Player:
                     elif self.vel_x < 0:  # left
                         self.pos_x = tile.rect.right
                     self.vel_x = 0
+                    # Gentle step-up assist so the player doesn't snag on ledges
+                    ledge_overlap = tile.rect.top - self.rect.bottom
+                    if 0 > ledge_overlap >= -TILE_SIZE // 3:
+                        self.pos_y = tile.rect.top - self.rect.height
+                        self.rect.y = int(self.pos_y)
+                        self.vel_y = 0
+                        self.on_ground = True
                 elif direction == "vertical":
                     if self.vel_y > 0:  # falling
                         self.pos_y = tile.rect.top - self.rect.height

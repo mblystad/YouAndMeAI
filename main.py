@@ -2,6 +2,7 @@ import asyncio
 import math
 import random
 import sys
+from dataclasses import dataclass
 
 import pygame
 import pygame.freetype
@@ -19,6 +20,33 @@ LEVEL_COMPLETE_MESSAGES = [
     "The sky blushes because we kept going.",
     "Every finish line feels softer beside you.",
 ]
+
+
+def wrap_text(font: pygame.freetype.Font, text: str, max_width: int) -> list[str]:
+    lines: list[str] = []
+    for paragraph in text.split("\n"):
+        words = paragraph.split()
+        if not words:
+            lines.append("")
+            continue
+        current_line = words[0]
+        for word in words[1:]:
+            candidate = f"{current_line} {word}"
+            if font.get_rect(candidate).width <= max_width:
+                current_line = candidate
+            else:
+                lines.append(current_line)
+                current_line = word
+        lines.append(current_line)
+    return lines
+
+
+@dataclass
+class OverlayEntry:
+    text: str
+    font: pygame.freetype.Font
+    color: tuple[int, int, int]
+    duration: float | None
 
 
 class Cloud:
@@ -90,45 +118,67 @@ class Background:
 
 class MessageOverlay:
     def __init__(self):
-        self.text = None
-        self.font = None
-        self.color = WHITE
-        self.duration = 0.0
+        self.current: OverlayEntry | None = None
+        self.queue: list[OverlayEntry] = []
 
     def show(self, text: str, duration: float | None, font: pygame.freetype.Font, color=WHITE):
-        self.text = text
-        self.font = font
-        self.color = color
-        self.duration = -1 if duration is None else duration
+        # normalize to RGB tuple
+        normalized_color = WHITE
+        if hasattr(color, "__iter__"):
+            components = list(color)  # type: ignore[arg-type]
+            if len(components) >= 3:
+                normalized_color = (int(components[0]), int(components[1]), int(components[2]))
+        entry = OverlayEntry(
+            text=text,
+            font=font,
+            color=normalized_color,
+            duration=None if duration is None else float(duration),
+        )
+        if self.current is None:
+            self.current = entry
+        else:
+            self.queue.append(entry)
 
     def clear(self):
-        self.text = None
-               self.font = None
-        self.duration = 0
+        self.current = None
+        self.queue.clear()
 
     def update(self, dt: float):
-        if self.text is None or self.duration == -1:
+        if self.current is None:
+            if self.queue:
+                self.current = self.queue.pop(0)
             return
-        self.duration -= dt
-        if self.duration <= 0:
-            self.clear()
+
+        if self.current.duration is None:
+            return
+
+        self.current.duration -= dt
+        if self.current.duration <= 0:
+            self.current = None
+            if self.queue:
+                self.current = self.queue.pop(0)
 
     def draw(self, surface: pygame.Surface):
-        if not self.text or not self.font:
+        if self.current is None:
             return
 
-        lines = self.text.split("\n")
-        rendered = [self.font.render(line, self.color)[0] for line in lines]
-        width = max(line.get_width() for line in rendered)
-        height = sum(line.get_height() for line in rendered) + 8 * (len(rendered) - 1)
+        font = self.current.font
+        text = self.current.text
+        if not text:
+            return
 
-        panel = pygame.Surface((width + 40, height + 32), pygame.SRCALPHA)
-        pygame.draw.rect(panel, (0, 0, 0, 150), panel.get_rect(), border_radius=16)
-        y = 16
+        wrapped = wrap_text(font, str(text), 560)
+        rendered = [font.render(line, self.current.color)[0] for line in wrapped]
+        width = max(line.get_width() for line in rendered)
+        height = sum(line.get_height() for line in rendered) + 10 * (len(rendered) - 1)
+
+        panel = pygame.Surface((width + 48, height + 40), pygame.SRCALPHA)
+        pygame.draw.rect(panel, (0, 0, 0, 160), panel.get_rect(), border_radius=18)
+        y = 20
         for line in rendered:
             x = (panel.get_width() - line.get_width()) // 2
             panel.blit(line, (x, y))
-            y += line.get_height() + 8
+            y += line.get_height() + 10
 
         panel_rect = panel.get_rect(center=(WIDTH // 2, int(HEIGHT * 0.22)))
         surface.blit(panel, panel_rect)
@@ -144,10 +194,8 @@ class PointsPrompt:
         self.choice = None
 
     def activate(self, delay: float = 0.0):
+        self.reset()
         self.delay = max(0.0, delay)
-        self.active = False
-        self.finished = False
-        self.choice = None
 
     def update(self, dt: float):
         if self.finished or self.delay < 0:
@@ -161,6 +209,12 @@ class PointsPrompt:
         self.delay = -1
         self.active = False
         self.finished = True
+        self.choice = None
+
+    def reset(self):
+        self.delay = -1.0
+        self.active = False
+        self.finished = False
         self.choice = None
 
     def handle_event(self, event: pygame.event.Event):
@@ -197,6 +251,17 @@ class PointsPrompt:
         panel.blit(main_text, ((width - main_text.get_width()) // 2, 26))
         panel.blit(hint_text, ((width - hint_text.get_width()) // 2, 82))
 
+        # little key circles for clarity
+        key_spacing = 120
+        base_x = width // 2 - key_spacing // 2
+        key_y = 112
+        for index, label in enumerate(("Y", "N")):
+            center_x = base_x + index * key_spacing
+            pygame.draw.circle(panel, (255, 255, 255, 210), (center_x, key_y), 20)
+            pygame.draw.circle(panel, (36, 42, 68, 230), (center_x, key_y), 20, width=2)
+            glyph, _ = self.hint_font.render(label, (36, 42, 68))
+            panel.blit(glyph, (center_x - glyph.get_width() // 2, key_y - glyph.get_height() // 2))
+
         panel_rect = panel.get_rect(center=(WIDTH // 2, HEIGHT - 120))
         surface.blit(panel, panel_rect)
 
@@ -224,19 +289,27 @@ class GoalMarker:
 def draw_story_panel(surface: pygame.Surface, font: pygame.freetype.Font, text: str):
     if not text:
         return
-    text_surface, _ = font.render(text, (26, 33, 61))
-    panel = pygame.Surface((text_surface.get_width() + 48, text_surface.get_height() + 32), pygame.SRCALPHA)
-    pygame.draw.rect(panel, (255, 255, 255, 185), panel.get_rect(), border_radius=16)
-    pygame.draw.rect(panel, (0, 0, 0, 25), panel.get_rect(), width=2, border_radius=16)
-    panel.blit(text_surface, (24, 16))
-    surface.blit(panel, (32, 40))
+    lines = wrap_text(font, text, 420)
+    rendered = [font.render(line, (36, 42, 68))[0] for line in lines]
+    width = max(line.get_width() for line in rendered)
+    height = sum(line.get_height() for line in rendered) + 8 * (len(rendered) - 1)
+    panel = pygame.Surface((width + 44, height + 36), pygame.SRCALPHA)
+    pygame.draw.rect(panel, (255, 255, 255, 205), panel.get_rect(), border_radius=18)
+    pygame.draw.rect(panel, (0, 0, 0, 35), panel.get_rect(), width=2, border_radius=18)
+    y = 18
+    for line in rendered:
+        panel.blit(line, (22, y))
+        y += line.get_height() + 8
+    surface.blit(panel, (28, 96))
 
 
 def draw_score(surface: pygame.Surface, font: pygame.freetype.Font, score: int):
     panel = pygame.Surface((170, 56), pygame.SRCALPHA)
     pygame.draw.rect(panel, (0, 0, 0, 130), panel.get_rect(), border_radius=14)
     font.render_to(panel, (20, 18), f"Score: {score}", WHITE)
-    surface.blit(panel, (24, 24))
+    panel_rect = panel.get_rect()
+    panel_rect.topright = (WIDTH - 24, 24)
+    surface.blit(panel, panel_rect)
 
 
 async def game_loop():
@@ -274,6 +347,12 @@ async def game_loop():
     level_transition = False
     end_sequence = False
     end_timer = 0.0
+
+    # trigger points prompt on whichever level mentions "points" (defaults to last level)
+    points_prompt_level = next(
+        (i for i, message in enumerate(MESSAGES) if "points" in message.lower()),
+        len(levels) - 1,
+    )
 
     running = True
     while running:
@@ -317,9 +396,13 @@ async def game_loop():
                 current_level = levels[current_level_index]
                 player.reset(100, HEIGHT - TILE_SIZE * 2)
                 level_transition = False
+
+                if current_level_index == points_prompt_level:
+                    points_prompt.activate(delay=1.5)
+                else:
+                    points_prompt.reset()
+
                 overlay.show(current_level.message, 4.0, fonts["story"], color=(36, 42, 68))
-                if current_level_index == len(levels) - 1:
-                    points_prompt.activate(delay=2.5)
 
         choice = points_prompt.consume_choice()
         if choice is not None:
