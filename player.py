@@ -6,19 +6,32 @@ from settings import *
 class Player:
     def __init__(self, x, y):
         # Load player images
-        stand_right = pygame.image.load('playerr.png').convert_alpha()
-        walk_right = pygame.image.load('playersr.png').convert_alpha()
-        jump_right = pygame.image.load('playerjr.png').convert_alpha()
+        stand_right = pygame.image.load("playerr.png").convert_alpha()
+        jump_right = pygame.image.load("playerjr.png").convert_alpha()
+        # Optional walk sprite (fallback to stand if missing)
+        try:
+            walk_right_raw = pygame.image.load("playersr.png").convert_alpha()
+        except Exception:
+            walk_right_raw = stand_right
 
         # Determine the maximum sprite size so animation frames align cleanly
-        self.base_width = max(stand_right.get_width(), jump_right.get_width(), walk_right.get_width())
-        self.base_height = max(stand_right.get_height(), jump_right.get_height(), walk_right.get_height())
+        self.base_width = max(stand_right.get_width(), jump_right.get_width(), walk_right_raw.get_width())
+        self.base_height = max(stand_right.get_height(), jump_right.get_height(), walk_right_raw.get_height())
 
         # Create oriented sprites with a shared anchor
         self.idle_right = self.center_image(stand_right)
         self.idle_left = pygame.transform.flip(self.idle_right, True, False)
+
         self.image_jump_right = self.center_image(jump_right)
         self.image_jump_left = pygame.transform.flip(self.image_jump_right, True, False)
+
+        walk_frame = self.center_image(walk_right_raw)
+        self.walk_frames_right = [self.idle_right, walk_frame]
+        self.walk_frames_left = [pygame.transform.flip(frame, True, False) for frame in self.walk_frames_right]
+        self.walk_frame_index = 0
+        self.walk_timer = 0.0
+        self.walk_frame_duration = 0.22  # seconds per frame
+
         # Set initial image and rectangle
         self.image = self.idle_right
         self.rect = self.image.get_rect(topleft=(int(x), int(y)))
@@ -27,7 +40,7 @@ class Player:
         self.pos_x = x
         self.pos_y = y
 
-        # Initialize physics variables
+        # Physics
         self.vel_x = 0
         self.vel_y = 0
         self.speed = 300
@@ -37,14 +50,16 @@ class Player:
         self.on_ground = False
         self.facing_right = True
         self.controls_enabled = True
-        # Jump forgiveness settings
+        self.moving_input = False
+
+        # Jump forgiveness
         self.coyote_time = 0.12
         self.jump_buffer = 0.15
         self.coyote_timer = 0
         self.jump_buffer_timer = 0
         self.was_jump_pressed = False
 
-        # Prebuild a drop shadow to soften the character on the scenery
+        # Shadow
         self.shadow_surface = self._create_shadow_surface()
 
     def center_image(self, image):
@@ -62,8 +77,11 @@ class Player:
         self.vel_x = 0
         self.vel_y = 0
         self.on_ground = False
+        self.walk_timer = 0.0
+        self.walk_frame_index = 0
         self.facing_right = True
         self.image = self.idle_right
+        self.moving_input = False
         self.rect.topleft = (int(self.pos_x), int(self.pos_y))
 
     def handle_input(self, dt):
@@ -72,6 +90,7 @@ class Player:
         if not self.controls_enabled:
             self.vel_x = self._approach(self.vel_x, 0, self.deceleration * dt)
             self._update_jump_buffer(False)
+            self.moving_input = False
             return
 
         direction = 0
@@ -79,6 +98,8 @@ class Player:
             direction -= 1
         if keys[K_RIGHT] or keys[K_d]:
             direction += 1
+
+        self.moving_input = direction != 0
 
         if direction != 0:
             self.vel_x += direction * self.acceleration * dt
@@ -96,38 +117,36 @@ class Player:
         self.was_jump_pressed = jump_pressed
 
     def apply_physics(self, dt):
-        # Apply gravity
+        # Gravity
         self.vel_y += GRAVITY * dt
         if self.vel_y > MAX_FALL_SPEED:
             self.vel_y = MAX_FALL_SPEED
 
     def move(self, tiles, dt):
-        # Horizontal movement using float positions
+        # Horizontal
         self.pos_x += self.vel_x * dt
         self.rect.x = int(self.pos_x)
-        # Keep player within screen bounds (left edge)
         if self.rect.left < 0:
             self.pos_x = 0
             self.rect.left = 0
             self.vel_x = 0
-        self.handle_collisions(tiles, 'horizontal')
+        self.handle_collisions(tiles, "horizontal")
 
-        # Vertical movement using float positions
+        # Vertical
         self.pos_y += self.vel_y * dt
         self.rect.y = int(self.pos_y)
         self.on_ground = False
-        self.handle_collisions(tiles, 'vertical')
+        self.handle_collisions(tiles, "vertical")
 
-        # Update rect position based on float coordinates
         self.rect.topleft = (int(self.pos_x), int(self.pos_y))
 
     def handle_collisions(self, tiles, direction):
         for tile in tiles:
             if self.rect.colliderect(tile.rect):
-                if direction == 'horizontal':
-                    if self.vel_x > 0:  # Moving right
+                if direction == "horizontal":
+                    if self.vel_x > 0:  # right
                         self.pos_x = tile.rect.left - self.rect.width
-                    elif self.vel_x < 0:  # Moving left
+                    elif self.vel_x < 0:  # left
                         self.pos_x = tile.rect.right
                     self.vel_x = 0
                     # Gentle step-up assist so the player doesn't snag on ledges
@@ -137,20 +156,36 @@ class Player:
                         self.rect.y = int(self.pos_y)
                         self.vel_y = 0
                         self.on_ground = True
-                elif direction == 'vertical':
-                    if self.vel_y > 0:  # Falling down
+                elif direction == "vertical":
+                    if self.vel_y > 0:  # falling
                         self.pos_y = tile.rect.top - self.rect.height
                         self.vel_y = 0
                         self.on_ground = True
-                    elif self.vel_y < 0:  # Moving up
+                    elif self.vel_y < 0:  # rising
                         self.pos_y = tile.rect.bottom
                         self.vel_y = 0
-                # Update rect after adjusting position
                 self.rect.topleft = (int(self.pos_x), int(self.pos_y))
 
     def update_image(self, dt):
+        is_walking = (
+            self.on_ground
+            and self.moving_input
+            and abs(self.vel_x) > 28
+            and self.controls_enabled
+        )
+
+        if is_walking:
+            self.walk_timer += dt
+            if self.walk_timer >= self.walk_frame_duration:
+                self.walk_timer -= self.walk_frame_duration
+                self.walk_frame_index = (self.walk_frame_index + 1) % len(self.walk_frames_right)
+        else:
+            self.walk_timer = 0.0
+            self.walk_frame_index = 0
+
         if self.on_ground:
-            self.image = self.idle_right if self.facing_right else self.idle_left
+            frames = self.walk_frames_right if self.facing_right else self.walk_frames_left
+            self.image = frames[self.walk_frame_index]
         else:
             self.image = self.image_jump_right if self.facing_right else self.image_jump_left
 

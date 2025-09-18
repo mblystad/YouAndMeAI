@@ -122,15 +122,12 @@ class MessageOverlay:
         self.queue: list[OverlayEntry] = []
 
     def show(self, text: str, duration: float | None, font: pygame.freetype.Font, color=WHITE):
+        # normalize to RGB tuple
         normalized_color = WHITE
         if hasattr(color, "__iter__"):
             components = list(color)  # type: ignore[arg-type]
             if len(components) >= 3:
-                normalized_color = (
-                    int(components[0]),
-                    int(components[1]),
-                    int(components[2]),
-                )
+                normalized_color = (int(components[0]), int(components[1]), int(components[2]))
         entry = OverlayEntry(
             text=text,
             font=font,
@@ -254,6 +251,7 @@ class PointsPrompt:
         panel.blit(main_text, ((width - main_text.get_width()) // 2, 26))
         panel.blit(hint_text, ((width - hint_text.get_width()) // 2, 82))
 
+        # little key circles for clarity
         key_spacing = 120
         base_x = width // 2 - key_spacing // 2
         key_y = 112
@@ -262,10 +260,7 @@ class PointsPrompt:
             pygame.draw.circle(panel, (255, 255, 255, 210), (center_x, key_y), 20)
             pygame.draw.circle(panel, (36, 42, 68, 230), (center_x, key_y), 20, width=2)
             glyph, _ = self.hint_font.render(label, (36, 42, 68))
-            panel.blit(
-                glyph,
-                (center_x - glyph.get_width() // 2, key_y - glyph.get_height() // 2),
-            )
+            panel.blit(glyph, (center_x - glyph.get_width() // 2, key_y - glyph.get_height() // 2))
 
         panel_rect = panel.get_rect(center=(WIDTH // 2, HEIGHT - 120))
         surface.blit(panel, panel_rect)
@@ -337,6 +332,7 @@ async def game_loop():
     fireworks = Fireworks()
     goal_marker = GoalMarker()
 
+    # Build levels with index + message, matching Level(index, message)
     levels = [Level(index=i, message=msg) for i, msg in enumerate(MESSAGES)]
     current_level_index = 0
     current_level = levels[current_level_index]
@@ -344,6 +340,7 @@ async def game_loop():
     player = Player(100, HEIGHT - TILE_SIZE * 2)
 
     overlay = MessageOverlay()
+    overlay.show(current_level.message, 4.0, fonts["story"], color=(36, 42, 68))
 
     points_prompt = PointsPrompt(fonts["story"], fonts["prompt"])
     score = 0
@@ -351,6 +348,7 @@ async def game_loop():
     end_sequence = False
     end_timer = 0.0
 
+    # trigger points prompt on whichever level mentions "points" (defaults to last level)
     points_prompt_level = next(
         (i for i, message in enumerate(MESSAGES) if "points" in message.lower()),
         len(levels) - 1,
@@ -398,10 +396,13 @@ async def game_loop():
                 current_level = levels[current_level_index]
                 player.reset(100, HEIGHT - TILE_SIZE * 2)
                 level_transition = False
+
                 if current_level_index == points_prompt_level:
                     points_prompt.activate(delay=1.5)
                 else:
                     points_prompt.reset()
+
+                overlay.show(current_level.message, 4.0, fonts["story"], color=(36, 42, 68))
 
         choice = points_prompt.consume_choice()
         if choice is not None:

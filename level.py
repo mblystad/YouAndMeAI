@@ -34,20 +34,29 @@ class Level:
     def __init__(self, index, message):
         self.index = index
         self.tiles = []
+        self._tile_positions = set()  # Track occupied tile coords to avoid duplicates
         self.flowers = []
         self.message = message
         self.generate_level()
 
+    def _add_tile(self, x, y):
+        key = (x, y)
+        if key not in self._tile_positions:
+            self._tile_positions.add(key)
+            self.tiles.append(Tile(x, y))
+
     def generate_level(self):
         self.tiles = []
         self.flowers = []
+        self._tile_positions = set()
 
         # Base ground layer
         for x in range(0, WIDTH, TILE_SIZE):
-            self.tiles.append(Tile(x, HEIGHT - TILE_SIZE))
+            self._add_tile(x, HEIGHT - TILE_SIZE)
 
         blueprint = self.BLUEPRINTS[self.index % len(self.BLUEPRINTS)]
-        # Later loops nudge the layout slightly to keep things fresh while remaining fair
+
+        # Nudge the layout slightly to keep things fresh while remaining fair
         lane_shift = min(self.index // len(self.BLUEPRINTS), 2)
         max_tile_index = WIDTH // TILE_SIZE
 
@@ -61,7 +70,7 @@ class Level:
                 for level in range(height):
                     x_pos = (start + dx) * TILE_SIZE
                     y_pos = HEIGHT - TILE_SIZE * (2 + level)
-                    self.tiles.append(Tile(x_pos, y_pos))
+                    self._add_tile(x_pos, y_pos)
 
         # Place floating platforms for optional shortcuts/rewards
         for tile_x, width, level_height in blueprint.get("platforms", []):
@@ -69,10 +78,23 @@ class Level:
             y_pos = HEIGHT - TILE_SIZE * level_height
             for dx in range(width):
                 x_pos = (start + dx) * TILE_SIZE
-                self.tiles.append(Tile(x_pos, y_pos))
+                self._add_tile(x_pos, y_pos)
 
-        # Scatter flowers with a deterministic seed so levels feel curated
+        # Deterministic RNG so levels feel curated per index
         rng = random.Random(self.index * 734)
+
+        # Gentle floating platforms for variation (deterministic)
+        num_extra = rng.randint(1, 2)
+        max_tiles_wide = WIDTH // TILE_SIZE
+        for _ in range(num_extra):
+            platform_width_tiles = rng.randint(1, 2)
+            start_tile_x = rng.randint(4, max(4, max_tiles_wide - (4 + platform_width_tiles)))
+            platform_x = start_tile_x * TILE_SIZE
+            platform_y = HEIGHT - TILE_SIZE * rng.randint(3, 4)
+            for t in range(platform_width_tiles):
+                self._add_tile(platform_x + t * TILE_SIZE, platform_y)
+
+        # Scatter flowers along ground tiles (deterministic)
         ground_tiles = [tile for tile in self.tiles if tile.rect.bottom == HEIGHT]
         for tile in ground_tiles:
             if rng.random() < 0.22:
