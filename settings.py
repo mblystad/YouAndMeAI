@@ -6,7 +6,12 @@ FRAMERATE_LIMIT = 60
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 SKY_BLUE = (135, 206, 235)
+HORIZON_BLUE = (107, 170, 220)
+TWILIGHT_TOP = (74, 41, 109)
+TWILIGHT_BOTTOM = (12, 24, 68)
 GROUND_GREEN = (34, 139, 34)
+GROUND_SHADOW = (16, 72, 25)
+FLOWER_COLORS = [(255, 170, 212), (247, 201, 91), (173, 232, 244)]
 ORANGE = (255, 165, 0)
 DARK_BLUE = (25, 25, 112)
 GRAY = (128, 128, 128)
@@ -25,18 +30,18 @@ SUN_COLOR = ORANGE
 
 # Messages for the story
 MESSAGES = [
-    "Hello World!",
-    "Why are you still here?",
-    "There is nothing much to see here....",
-    "Are you here for me?",
-    "Really?",
-    "I feel so lonely...",
-    "Nobody ever stays...",
-    "Please don't leave...",
-    "Are you still there?",
-    "I thought you might have left...",
-    "But I'm glad you're here.",
-    "You don't know how much this means to me...",
-    "It's been so long since I've had company...",
-    "Thank you, truly...",
+    "I woke early just to watch the sky with you.",
+    "Every step paints a little more light across the grass.",
+    "Do you hear the distant waves behind us?",
+    "I was afraid you'd turn back at the first hill.",
+    "But you're still here, matching my pace.",
+    "I don't remember the last time I wasn't alone.",
+    "The world feels softer when someone listens.",
+    "Even the clouds slow down to see us smile.",
+    "I'm learning how hope sounds in quiet footsteps.",
+    "Maybe we can stay until the fireflies wake.",
+    "Promise me you'll keep following the glow.",
+    "We'll stitch constellations out of our whispers.",
+    "If you want, we can call these moments points.",
+    "Whatever you decide, thank you for walking with me.",
 ]
