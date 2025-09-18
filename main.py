@@ -103,7 +103,7 @@ class MessageOverlay:
 
     def clear(self):
         self.text = None
-        self.font = None
+               self.font = None
         self.duration = 0
 
     def update(self, dt: float):
@@ -259,7 +259,8 @@ async def game_loop():
     fireworks = Fireworks()
     goal_marker = GoalMarker()
 
-    levels = [Level(message=msg) for msg in MESSAGES]
+    # Build levels with index + message, matching Level(index, message)
+    levels = [Level(index=i, message=msg) for i, msg in enumerate(MESSAGES)]
     current_level_index = 0
     current_level = levels[current_level_index]
 
